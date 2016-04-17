@@ -1,7 +1,7 @@
 var casper = require('casper').create();
 var classname = 'reload-' + (new Date().getTime());
 
-function getHardDriveSizes(str) {
+ function getHardDriveSizes(str) {
     var hd_size = 0;
     var hd_sizes = []; // return array of sizes because author may have multiple hard drives
     var hd_gbunits_loc = [];
@@ -10,7 +10,6 @@ function getHardDriveSizes(str) {
     
     this.echo('in checkHardDriveSize()');
     this.echo('str = ' + str);
-    /*
     // for some reason, string match isn't working for me, so I'm doing a workaround here using search to get all matched elements.
     while((offset = str.substr(start).search(/gb|gigabyte|gig|ssd|hhd|hdd/i)) !== -1) {   
         this.echo('offset = ' + offset)
@@ -62,7 +61,7 @@ function getHardDriveSizes(str) {
         }
     } // j loop
     
-    return hd_sizes; */
+    return hd_sizes; 
 }
 
 casper.start('http://www.ksl.com/index.php?nid=231&cat=554&category=16', function() { // KSL classifieds, Apple Laptops / Desktops
@@ -158,14 +157,14 @@ casper.waitWhileSelector('body.' + classname, function() {
     for (var i = 0; i < titles.length; i++) {
         this.echo('i: ' + i);
         var hd_sizes = [];
-        hd_sizes = getHardDriveSizes(titles[i]); // check titles
+        hd_sizes = getHardDriveSizes.call(this, (titles[i])); // check titles
         this.echo('hd_sizes.length (titles): ' + hd_sizes.length);
         if (!hd_sizes.length) { // if didn't return a hard drive length
-            hd_sizes = getHardDriveSizes(descriptions[i]); // check description
+            hd_sizes = getHardDriveSizes.call(this, descriptions[i]); // check description
              this.echo('hd_sizes.length (descriptions): ' + hd_sizes.length);
             if (!hd_sizes.length) { // if didn't return a hard drive length
                 this.echo('before clickLabel detailed description')
-                clickLabel('titles[i]', a); // get detailed description
+                this.clickLabel('titles[i]', a); // get detailed description
                 // It happens when they change something...
                 casper.evaluate(function(classname){
                   document.body.className += ' ' + classname;
@@ -174,7 +173,7 @@ casper.waitWhileSelector('body.' + classname, function() {
                 casper.waitWhileSelector('body.' + classname, function() {      
                     var detailedDescription = this.fetchText('div.productContentText'); // detail product description
                     this.echo('detailedDescription: ' + detailedDescription);
-                    hd.sizes = getHardDriveSizes(detailedDescription);
+                    hd.sizes = getHardDriveSizes.call(this, detailedDescription);
                 });
                  this.echo('hd_sizes.length (detailed description): ' + hd_sizes.length);
             }
@@ -195,7 +194,7 @@ casper.waitWhileSelector('body.' + classname, function() {
         }
             
     } // i loop
-                
+    
           
     
 });
