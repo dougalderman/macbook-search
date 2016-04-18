@@ -1,0 +1,23 @@
+{
+  "name": "macbook-search",
+  "version": "1.0.0",
+  "description": "macbook-search",
+  "main": "getMacs.js",
+  "dependencies": {
+    "q": "^1.4.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dougalderman/macbook-search.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dougalderman/macbook-search/issues"
+  },
+  "homepage": "https://github.com/dougalderman/macbook-search#readme"
+}
