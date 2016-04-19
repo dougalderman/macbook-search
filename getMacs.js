@@ -11,7 +11,9 @@ var casper = require('casper').create(
     detailedDescriptions = [],
     prices = [],
     hardDriveSizes = [],
-    macbook_pros = '';
+    macbook_pros = '',
+    donePaging = false,
+    curr_url = '';
    
 
 function getHardDriveSizes(str) {
@@ -123,14 +125,14 @@ casper.evaluate(function(classname){
 casper.waitWhileSelector('body.' + classname, function() {
   
     // save off url for later use in paging
-    var curr_url = this.getCurrentUrl();
+    curr_url = this.getCurrentUrl();
     this.echo('curr_url: ' + curr_url);
 
     // Use fetchText for retrieving titles because getElementsInfo.map will create separate array elements for 'more...'
     var titles_str = this.fetchText('a.listlink'); // titles
     this.echo('Titles: ' + titles_str); 
     // Split title into array based on /more.../ regex
-    titles = titles_str.split(/more.../);
+    titles.push(titles_str.split(/more.../));
     // Remove blank last element
     titles.pop();
     
@@ -140,7 +142,7 @@ casper.waitWhileSelector('body.' + classname, function() {
     }
     
     // Get hrefs for all ads
-    hrefs = this.getElementsAttribute('span.adTitle a.listlink', 'href');
+    hrefs.push(this.getElementsAttribute('span.adTitle a.listlink', 'href'));
     this.echo('hrefs.length: ' + hrefs.length);
     for (var i = 0; i < hrefs.length; i++) {
         this.echo('hrefs[' + i + ']: ' + hrefs[i]);
@@ -149,33 +151,65 @@ casper.waitWhileSelector('body.' + classname, function() {
     // Get prices for all ads
     var prices_str = this.fetchText('div.priceBox');
     this.echo('prices_str: ' + prices_str);
-    prices = prices_str.split('\n');
-    prices = prices.filter(function(item) {
+    var prices_arr = prices_str.split('\n');
+    prices_arr = prices_arr.filter(function(item) {
                      return item.indexOf('$') !== -1;
                 });
     
-    this.echo('prices.length: ' + prices.length);
-    for (var i = 0; i < prices.length; i++) {
-        this.echo('prices[' + i + '] before formatting: ' + prices[i]);
-        prices[i] = prices[i].trim(); // remove whitespace
-        prices[i] = prices[i].replace(',', '') // remove comma
-        prices[i] = (Number(prices[i].slice(1)) / 100).toFixed(2);
-        this.echo('prices[' + i + ']: after formatting: ' + prices[i]);
+    this.echo('prices_arr.length: ' + prices_arr.length);
+    for (var i = 0; i < prices_arr.length; i++) {
+        this.echo('prices_arr[' + i + '] before formatting: ' + prices_arr[i]);
+        prices_arr[i] = prices_arr[i].trim(); // remove whitespace
+        prices_arr[i] = prices_arr[i].replace(',', '') // remove comma
+        prices_arr[i] = (Number(prices_arr[i].slice(1)) / 100).toFixed(2);
+        this.echo('prices_arr[' + i + ']: after formatting: ' + prices_arr[i]);
     } 
     
+    prices.push(prices_arr);
+    
     // Use getElementsInfo for retrieving descriptions because it doesn't create separate array element for 'more...'. Correctly maps array. 
-    descriptions = this.getElementsInfo('div.adDesc').map(function(e){
+    descriptions_arr = this.getElementsInfo('div.adDesc').map(function(e){
     return e.html;
 }); 
-    this.echo('descriptions.length: ' + descriptions.length);
-    for (var i = 0; i < descriptions.length; i++) {
+    this.echo('descriptions_arr.length: ' + descriptions_arr.length);
+    for (var i = 0; i < descriptions_arr.length; i++) {
         // remove everything starting with <a class="listlink" from description.
-        var a_loc = descriptions[i].search('<a class="listlink"');
+        var a_loc = descriptions_arr[i].search('<a class="listlink"');
         if (a_loc > 0)
-            descriptions[i] = descriptions[i].slice(0, a_loc);
-        this.echo('descriptions[' + i + ']: ' + descriptions[i]);
+            descriptions_arr[i] = descriptions_arr[i].slice(0, a_loc);
+        this.echo('descriptions_arr[' + i + ']: ' + descriptions_arr[i]);
     }
     
+    descriptions.push(descriptions_arr);
+});
+
+/* while (!donePaging) {  // infinite loop until timeout (no futher paging)
+
+    this.echo('in while loop');
+    casper.then(function() {
+
+     // Hit next page button to get next page of ads
+        this.echo('Before hitting next page button');
+        this.clickLabel('| Next', 'span');
+        this.echo('After hitting next page button');
+         // save off url for later use in paging
+        curr_url = this.getCurrentUrl();
+        this.echo('curr_url: ' + curr_url);
+    });
+
+    // It happens when they change something...
+    casper.evaluate(function(classname){
+      document.body.className += ' ' + classname;
+    }, classname);
+
+    casper.waitWhileSelector('body.' + classname, getProductInfo(), function timeout() {
+        donePaging = true;
+    });
+
+} // while loop */
+    
+
+casper.then(function() {
  // Filter through title and description for Macbook Pro because original search filter isn't perfect. If no Macbook Pro in title or description remove from array.
     for (var i = titles.length - 1; i >= 0; i--) {
         if (!((titles[i].search(/macbook pro/i) !== -1) ||
