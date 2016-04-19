@@ -15,6 +15,10 @@ var casper = require('casper').create(
     donePaging = false,
     curr_url = '';
    
+Array.prototype.extend = function (other_array) {
+    if (other_array.length)
+        other_array.forEach(function(v) {this.push(v)}, this);    
+}
 
 function getHardDriveSizes(str) {
     var hd_size = 0,
@@ -78,7 +82,7 @@ function getHardDriveSizes(str) {
         if (hd_size_end) {
             hd_size = Number(str.substring(hd_size_start, hd_size_end + 1));
             this.echo('hd_size before ternary op: ' + hd_size);
-            hd_size = hd_size > 32 ? hd_size : 0; // Must be greater than 32 gb to be a valid hard drive size (versus RAM size).
+            hd_size = (hd_size > 32) && (hd_size < 2000) ? hd_size : 0; // Must be greater than 32 gb to be a valid hard drive size (versus RAM size). Must be less than 2000 or assume it's a typo.
             this.echo('hd_size after ternary op: ' + hd_size);
         }
 
@@ -91,7 +95,79 @@ function getHardDriveSizes(str) {
     
      
     return hd_sizes; 
-}
+}  // getHardDriveSizes
+
+function getMacInfo() {
+  
+    // save off url
+    curr_url = this.getCurrentUrl();
+    this.echo('curr_url: ' + curr_url);
+
+    // Get titles for all ads
+    var titles_arr = this.getElementsInfo('a.listlink').map(function(e){
+    return e.html;
+});
+    for (var i = titles_arr.length - 1; i >= 0; i--) {
+        // remove 'more...' elements
+        if (titles_arr[i] === 'more...')
+            titles_arr.splice(i, 1); 
+    }
+    
+    this.echo('titles_arr_length after removing more... elements: ' + titles_arr.length); 
+    
+    for (var i = 0; i < titles_arr.length; i++) {
+        this.echo('titles_arr[' + i + ']: ' + titles_arr[i]);
+    }
+    
+    titles.extend(titles_arr);
+    this.echo('titles.length after extend: ' + titles.length);
+       
+    // Get hrefs for all ads
+    var hrefs_arr = this.getElementsAttribute('span.adTitle a.listlink', 'href');
+    for (var i = 0; i < hrefs_arr.length; i++) {
+        this.echo('hrefs_arr[' + i + ']: ' + hrefs_arr[i]);
+    }
+    
+    hrefs.extend(hrefs_arr);
+    this.echo('hrefs.length after extend: ' + hrefs.length);
+   
+    
+    // Get prices for all ads
+    var prices_str = this.fetchText('div.priceBox');
+    this.echo('prices_str: ' + prices_str);
+    var prices_arr = prices_str.split('\n');
+    prices_arr = prices_arr.filter(function(item) {
+                     return item.indexOf('$') !== -1;
+                });
+    
+    this.echo('prices_arr.length: ' + prices_arr.length);
+    for (var i = 0; i < prices_arr.length; i++) {
+        this.echo('prices_arr[' + i + '] before formatting: ' + prices_arr[i]);
+        prices_arr[i] = prices_arr[i].trim(); // remove whitespace
+        prices_arr[i] = prices_arr[i].replace(',', '') // remove comma
+        prices_arr[i] = (Number(prices_arr[i].slice(1)) / 100).toFixed(2);
+        this.echo('prices_arr[' + i + ']: after formatting: ' + prices_arr[i]);
+    } 
+    
+    prices.extend(prices_arr);
+    this.echo('prices.length after extend: ' + prices.length);
+    
+    var descriptions_arr = this.getElementsInfo('div.adDesc').map(function(e){
+    return e.html;
+}); 
+    this.echo('descriptions_arr.length: ' + descriptions_arr.length);
+    for (var i = 0; i < descriptions_arr.length; i++) {
+        // remove everything starting with <a class="listlink" from description.
+        var a_loc = descriptions_arr[i].search('<a class="listlink"');
+        if (a_loc > 0)
+            descriptions_arr[i] = descriptions_arr[i].slice(0, a_loc);
+        this.echo('descriptions_arr[' + i + ']: ' + descriptions_arr[i]);
+    }
+    
+    descriptions.extend(descriptions_arr);
+    this.echo('descriptions.length after extend: ' + descriptions.length); 
+} // getMacInfo
+
 
 casper.start('http://www.ksl.com/index.php?nid=231&cat=554&category=16', function() { // KSL classifieds, Apple Laptops / Desktops
     this.echo('Page Title: ' + this.getTitle());
@@ -122,93 +198,43 @@ casper.evaluate(function(classname){
   document.body.className += ' ' + classname;
 }, classname);
 
-casper.waitWhileSelector('body.' + classname, function() {
-  
-    // save off url for later use in paging
-    curr_url = this.getCurrentUrl();
-    this.echo('curr_url: ' + curr_url);
+casper.waitWhileSelector('body.' + classname, getMacInfo);
 
-    // Use fetchText for retrieving titles because getElementsInfo.map will create separate array elements for 'more...'
-    var titles_str = this.fetchText('a.listlink'); // titles
-    this.echo('Titles: ' + titles_str); 
-    // Split title into array based on /more.../ regex
-    titles.push(titles_str.split(/more.../));
-    // Remove blank last element
-    titles.pop();
+casper.then(function() {
     
-    this.echo('titles.length: ' + titles.length);
-    for (var i = 0; i < titles.length; i++) {
-        this.echo('titles[' + i + ']: ' + titles[i]);
-    }
+    this.echo('before first clickNextPage call');
+    clickNextPage.call(this);
+    this.echo('after first clickNextPage call');
     
-    // Get hrefs for all ads
-    hrefs.push(this.getElementsAttribute('span.adTitle a.listlink', 'href'));
-    this.echo('hrefs.length: ' + hrefs.length);
-    for (var i = 0; i < hrefs.length; i++) {
-        this.echo('hrefs[' + i + ']: ' + hrefs[i]);
-    }
-    
-    // Get prices for all ads
-    var prices_str = this.fetchText('div.priceBox');
-    this.echo('prices_str: ' + prices_str);
-    var prices_arr = prices_str.split('\n');
-    prices_arr = prices_arr.filter(function(item) {
-                     return item.indexOf('$') !== -1;
-                });
-    
-    this.echo('prices_arr.length: ' + prices_arr.length);
-    for (var i = 0; i < prices_arr.length; i++) {
-        this.echo('prices_arr[' + i + '] before formatting: ' + prices_arr[i]);
-        prices_arr[i] = prices_arr[i].trim(); // remove whitespace
-        prices_arr[i] = prices_arr[i].replace(',', '') // remove comma
-        prices_arr[i] = (Number(prices_arr[i].slice(1)) / 100).toFixed(2);
-        this.echo('prices_arr[' + i + ']: after formatting: ' + prices_arr[i]);
-    } 
-    
-    prices.push(prices_arr);
-    
-    // Use getElementsInfo for retrieving descriptions because it doesn't create separate array element for 'more...'. Correctly maps array. 
-    descriptions_arr = this.getElementsInfo('div.adDesc').map(function(e){
-    return e.html;
-}); 
-    this.echo('descriptions_arr.length: ' + descriptions_arr.length);
-    for (var i = 0; i < descriptions_arr.length; i++) {
-        // remove everything starting with <a class="listlink" from description.
-        var a_loc = descriptions_arr[i].search('<a class="listlink"');
-        if (a_loc > 0)
-            descriptions_arr[i] = descriptions_arr[i].slice(0, a_loc);
-        this.echo('descriptions_arr[' + i + ']: ' + descriptions_arr[i]);
-    }
-    
-    descriptions.push(descriptions_arr);
-});
+    // while (!donePaging) {  // infinite loop until timeout (no futher paging)
+        // It happens when they change something...
+        casper.evaluate(function(classname){
+          document.body.className += ' ' + classname;
+        }, classname);
 
-/* while (!donePaging) {  // infinite loop until timeout (no futher paging)
+        casper.waitWhileSelector('body.' + classname,
+            function then() {
+                this.echo('before getMacInfo call');
+                getMacInfo.call(this);
+                this.echo('after getMacInfo call');
+                clickNextPage.call(this);
+                this.echo('after clickNextPage call');
+            },
+            function timeout() {
+                this.echo('in timeout. Set donePaging = true');
+                donePaging = true;
+            });
 
-    this.echo('in while loop');
-    casper.then(function() {
-
-     // Hit next page button to get next page of ads
+   // } // while loop
+            
+    function clickNextPage() {
+        // Hit next page button to get next page of ads
         this.echo('Before hitting next page button');
-        this.clickLabel('| Next', 'span');
+        this.click('a.pBox span.productPaginationButton');
         this.echo('After hitting next page button');
-         // save off url for later use in paging
-        curr_url = this.getCurrentUrl();
-        this.echo('curr_url: ' + curr_url);
-    });
-
-    // It happens when they change something...
-    casper.evaluate(function(classname){
-      document.body.className += ' ' + classname;
-    }, classname);
-
-    casper.waitWhileSelector('body.' + classname, getProductInfo(), function timeout() {
-        donePaging = true;
-    });
-
-} // while loop */
+    }
+});        
     
-
 casper.then(function() {
  // Filter through title and description for Macbook Pro because original search filter isn't perfect. If no Macbook Pro in title or description remove from array.
     for (var i = titles.length - 1; i >= 0; i--) {
@@ -247,7 +273,7 @@ casper.waitFor(function check() {
     return (detailedDescriptions.length === titles.length) && (titles.length !== 0);
 }, function then() {
                                                   
-    // Filter through title and description for hard drive size. Want >= 256GB. Handle all the different ways the ad author can specify hard drive size (xxxGB, xxxGigabyte, xxxgig, xxxtb, xxxTB, xxxSSD, or xxxHHD). Distinguish between hard drive and memory size by assuming > 32GB refers to hard drive. Delete all ads that don't meet criteria or don't specify hard drive size.
+    // Filter through title and description for hard drive size. Want >= 256GB. Handle all the different ways the ad author can specify hard drive size (xxxGB, xxxGigabyte, xxxgig, xxxterabyte, xxxSSD, or xxxHHD). Distinguish between hard drive and memory size by assuming > 32GB refers to hard drive. Delete all ads that don't meet criteria or don't specify hard drive size.
 
     this.echo('hard drive size search');
     for (var i = 0; i < titles.length; i++) {
@@ -294,7 +320,7 @@ casper.waitFor(function check() {
     
     this.echo('titles.length: ' + titles.length);
     for (var i = 0; i < titles.length; i++) {
-        macbook_pros += 'title: ' + titles[i] + '\nprice: $' + prices[i] + '\nurl: ' + hrefs[i] + '\nbrief description: ' + descriptions[i] + '\ndetailed description: ' + detailedDescriptions[i] + '\n-------------------------------------------------------\n';
+        macbook_pros += 'title: ' + titles[i] + '\nprice: $' + prices[i] + '\nurl: ' + 'http://www.ksl.com/' + hrefs[i] + '\nbrief description: ' + descriptions[i] + '\ndetailed description: ' + detailedDescriptions[i] + '\n-------------------------------------------------------\n';
     }
 
     this.echo('before write to file');
@@ -307,6 +333,6 @@ casper.waitFor(function check() {
     
 }, function timeout() {
     this.echo('timed out waiting ').exit();
-}, 180000);  // increase timeout from default (5 secs) to 180 secs
+}, 600000);  // increase timeout from default (5 secs) to 600 secs
 
 casper.run();
