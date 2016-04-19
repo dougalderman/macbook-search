@@ -11,7 +11,6 @@ Since detailed description was on a separate product page, a forEach loop was co
     hrefs.forEach(function(elem, indx, arr) {
         casper.thenOpen('http://www.ksl.com/' + elem).then(function() {
             detailedDescriptions[indx] =   this.fetchText('div.productContentText'); // detail product description
-            this.echo('detailedDescriptions[' + indx + ']: ' + detailedDescriptions[indx]);
         });
     });
 ```
@@ -23,23 +22,18 @@ Here is code to get prices from the page and process the data to allow for futur
 ```javascript
 // Get prices for all ads
     var prices_str = this.fetchText('div.priceBox');
-    this.echo('prices_str: ' + prices_str);
     var prices_arr = prices_str.split('\n');
     prices_arr = prices_arr.filter(function(item) {
                      return item.indexOf('$') !== -1;
                 });
 
-    this.echo('prices_arr.length: ' + prices_arr.length);
     for (var i = 0; i < prices_arr.length; i++) {
-        this.echo('prices_arr[' + i + '] before formatting: ' + prices_arr[i]);
         prices_arr[i] = prices_arr[i].trim(); // remove whitespace
         prices_arr[i] = prices_arr[i].replace(',', '') // remove comma
         prices_arr[i] = (Number(prices_arr[i].slice(1)) / 100).toFixed(2);
-        this.echo('prices_arr[' + i + ']: after formatting: ' + prices_arr[i]);
     }
 
     prices.extend(prices_arr);
-    this.echo('prices.length after extend: ' + prices.length);
 ```
 
 ####getHardDriveSizes()
