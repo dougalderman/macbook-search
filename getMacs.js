@@ -1,11 +1,18 @@
-var casper = require('casper').create(),
-    Q = require('q');
+var casper = require('casper').create(
+/*    {
+        verbose: true,
+        logLevel: 'debug'
+    } */
+),
     classname = 'reload-' + (new Date().getTime()),
     titles = [],
     hrefs = [],
     descriptions = [],
     detailedDescriptions = [],
-    hardDriveSizes = [];
+    prices = [],
+    hardDriveSizes = [],
+    macbook_pros = '';
+   
 
 function getHardDriveSizes(str) {
     var hd_size = 0,
@@ -19,11 +26,12 @@ function getHardDriveSizes(str) {
     str = str.toLowerCase();
      
     // check for terabyte. If any mention of terabyte, it's big enough.
-    if (str.search(/tb|terabyte/) !== -1) {
+    if (str.search(/terabyte/) !== -1) {
         hd_sizes.push(1024); 
         return hd_sizes;
     }
     
+    this.echo('after terabyte check');
     // for some reason, string match isn't working for me, so I'm doing a workaround here using search to get all matched elements.
     while ((offset = str.substr(start).search(/gb|gigabyte|gig|ssd|hhd|hdd/)) !== -1) {   
         hd_gbunits_loc.push(start + offset);
@@ -37,6 +45,7 @@ function getHardDriveSizes(str) {
         this.echo('hd_gbunits_loc: ' + hd_gbunits_loc[j]);
         var hd_size_start = 0;
         var hd_size_end = 0;
+        hd_size = 0;
         var foundNumber = false;
         for (var k = hd_gbunits_loc[j] - 1; k > 0; k--) {
             this.echo('k: ' + k);
@@ -71,7 +80,8 @@ function getHardDriveSizes(str) {
             this.echo('hd_size after ternary op: ' + hd_size);
         }
 
-        if (hd_size) { // if hard drive size in string
+        if (hd_size !== 0) { // if nonzero hard drive size in string
+            this.echo('pushing ' + hd_size + ' into array');
             hd_sizes.push(hd_size); // add to array of hd_sizes
         } 
         
@@ -82,7 +92,7 @@ function getHardDriveSizes(str) {
 }
 
 casper.start('http://www.ksl.com/index.php?nid=231&cat=554&category=16', function() { // KSL classifieds, Apple Laptops / Desktops
-    this.echo('Apple Laptops / Desktops: ' + this.getTitle());
+    this.echo('Page Title: ' + this.getTitle());
     
     // Fill out keyword search field and submit
     this.sendKeys('input[name="keyword"]', 'Macbook pro');
@@ -96,11 +106,7 @@ casper.evaluate(function(classname){
 }, classname);
 
 casper.waitWhileSelector('body.' + classname, function() {
-/*     this.capture('./screenshots/after_keyword_search.jpg', undefined, {
-        format: 'jpg',
-        quality: 75
-    }); 
-    this.echo('After screenshot'); */
+
     
      // Fill out min and max search fields and submit (separate submit for price versus keyword. Keyword search still in place)
     this.sendKeys('input[name="min_priceInput"]', '800');
@@ -116,12 +122,6 @@ casper.evaluate(function(classname){
 
 casper.waitWhileSelector('body.' + classname, function() {
   
-    /*    this.capture('./screenshots/after_price_search.jpg', undefined, {
-        format: 'jpg',
-        quality: 75
-    }); 
-    this.echo('After screenshot'); */
-    
     // save off url for later use in paging
     var curr_url = this.getCurrentUrl();
     this.echo('curr_url: ' + curr_url);
@@ -139,11 +139,30 @@ casper.waitWhileSelector('body.' + classname, function() {
         this.echo('titles[' + i + ']: ' + titles[i]);
     }
     
+    // Get hrefs for all ads
     hrefs = this.getElementsAttribute('span.adTitle a.listlink', 'href');
     this.echo('hrefs.length: ' + hrefs.length);
     for (var i = 0; i < hrefs.length; i++) {
         this.echo('hrefs[' + i + ']: ' + hrefs[i]);
     }
+    
+    // Get prices for all ads
+    var prices_str = this.fetchText('div.priceBox');
+    this.echo('prices_str: ' + prices_str);
+    prices = prices_str.split('\n');
+    prices = prices.filter(function(item) {
+                     return item.indexOf('$') !== -1;
+                });
+    
+    this.echo('prices.length: ' + prices.length);
+    for (var i = 0; i < prices.length; i++) {
+        this.echo('prices[' + i + '] before formatting: ' + prices[i]);
+        prices[i] = prices[i].trim(); // remove whitespace
+        prices[i] = prices[i].replace(',', '') // remove comma
+        prices[i] = (Number(prices[i].slice(1)) / 100).toFixed(2);
+        this.echo('prices[' + i + ']: after formatting: ' + prices[i]);
+    } 
+    
     // Use getElementsInfo for retrieving descriptions because it doesn't create separate array element for 'more...'. Correctly maps array. 
     descriptions = this.getElementsInfo('div.adDesc').map(function(e){
     return e.html;
@@ -166,28 +185,38 @@ casper.waitWhileSelector('body.' + classname, function() {
             titles.splice(i, 1);
             descriptions.splice(i, 1);
             hrefs.splice(i, 1);
+            prices.splice(i, 1);
         }
     }
     
     this.echo('titles.length after splice: ' + titles.length);
     this.echo('descriptions.length after splice: ' + descriptions.length);
     this.echo('hrefs.length after splice: ' + hrefs.length);
+    this.echo('prices.length after splice: ' + prices.length);
     for (var i = 0; i < titles.length; i++) {
         this.echo('titles[' + i + ']: ' + titles[i]);
         this.echo('descriptions[' + i + ']: ' + descriptions[i]);
         this.echo('hrefs[' + i + ']: ' + hrefs[i]);
+        this.echo('prices[' + i + ']: ' + prices[i]);
     }
     
-                                                 
+    // Get detailed descriptions for all ads
+    hrefs.forEach(function(elem, indx, arr) {
+        casper.thenOpen('http://www.ksl.com/' + elem).then(function() {
+            detailedDescriptions[indx] =   this.fetchText('div.productContentText'); // detail product description
+            this.echo('detailedDescriptions[' + indx + ']: ' + detailedDescriptions[indx]);
+        });
+    });
+});
+      
+casper.waitFor(function check() {
+    return (detailedDescriptions.length === titles.length) && (titles.length !== 0);
+}, function then() {
+                                                  
     // Filter through title and description for hard drive size. Want >= 256GB. Handle all the different ways the ad author can specify hard drive size (xxxGB, xxxGigabyte, xxxgig, xxxtb, xxxTB, xxxSSD, or xxxHHD). Distinguish between hard drive and memory size by assuming > 32GB refers to hard drive. Delete all ads that don't meet criteria or don't specify hard drive size.
 
     this.echo('hard drive size search');
-    var defer = Q.defer();
-    this.echo('after set defer');
-    var detailNeeded = [];
-    var detailedDesc = [];
     for (var i = 0; i < titles.length; i++) {
-        detailNeeded[i] = false;
         this.echo('i: ' + i);
         this.echo('getHardDriveSizes call for titles[' + i + ']');
         hardDriveSizes[i] = getHardDriveSizes.call(this, (titles[i])); // check titles
@@ -197,50 +226,13 @@ casper.waitWhileSelector('body.' + classname, function() {
             hardDriveSizes[i] = getHardDriveSizes.call(this, descriptions[i]); // check description
              this.echo('hardDriveSizes[' + i + '] length (descriptions): ' + hardDriveSizes[i].length);
             if (!hardDriveSizes[i].length) { // if didn't return a hard drive length
-                detailNeeded[i] = true;
-                this.echo('before open detail page');
-                casper.open('http://www.ksl.com/' + hrefs[i]).then(function(){
-                    this.echo('after open detail page');
-                    detailedDesc[i] = this.fetchText('div.productContentText'); // detail product description
-                    this.echo('detailedDesc[ + ' + i + ']: ' + detailedDesc[i]);
-               
-                    this.echo('getHardDriveSizes call for detailedDesc');
-                    hardDriveSizes[i] = getHardDriveSizes.call(this, detailedDesc[i]);
-                    
-                    this.echo('hd_sizes.length (detailed description): ' + hd_sizes.length);
-                    checkIfAllDataDone.call(this);
-                });
+                this.echo('getHardDriveSizes call for detailedDesc');
+                hardDriveSizes[i] = getHardDriveSizes.call(this, detailedDescriptions[i]);
+                this.echo('hardDriveSizes[' + i + '] length (detailed descriptions): ' + hardDriveSizes[i].length);
             }  
         } 
-    } // i
+    } // i loop
     
-    function checkIfAllDataDone() {
-        var done = true;
-        for (var i = 0; i < titles.length; i++) {
-            if (detail.needed[i]) {
-                if (!detailedDesc[i]) {
-                    done = false;
-                    this.echo(i + ' not complete');
-                }
-            }
-        }
-        if (done) {
-            this.echo('All Data Done');
-            // this.pendingWait = false;
-            defer.resolve({
-				detailedDescriptions: detailedDesc
-	        })
-        }
-
-    }
-    this.echo('before pendingWait');
-    // this.pendingWait = true;
-    this.echo('after pendingWait');
-    return defer.promise;    
-});
-        
-casper.then(function() {
-            
     for (var i = titles.length - 1; i >= 0; i--) {
         
         var bigEnough = false;
@@ -257,10 +249,30 @@ casper.then(function() {
             titles.splice(i, 1);
             descriptions.splice(i, 1);
             hrefs.splice(i, 1);
+            prices.splice(i, 1);
+            detailedDescriptions.splice(i, 1);
         }
             
     } // i loop
     
-});
+    
+    // Write results to file
+    
+    this.echo('titles.length: ' + titles.length);
+    for (var i = 0; i < titles.length; i++) {
+        macbook_pros += 'title: ' + titles[i] + '\nprice: $' + prices[i] + '\nurl: ' + hrefs[i] + '\nbrief description: ' + descriptions[i] + '\ndetailed description: ' + detailedDescriptions[i] + '\n-------------------------------------------------------\n';
+    }
+
+    this.echo('before write to file');
+    var fs = require('fs');
+    var date = new Date();
+    var fname = 'output/' + date.getFullYear() + '_' + (date.getMonth() + 1) + '_' + date.getDate() + '_' + date.getHours()  + date.getMinutes() + '.txt';
+    fs.write(fname, macbook_pros, 'w');
+    this.echo('after write to file');
+    
+    
+}, function timeout() {
+    this.echo('timed out waiting ').exit();
+}, 180000);  // increase timeout from default (5 secs) to 180 secs
 
 casper.run();
