@@ -1,5 +1,5 @@
 var casper = require('casper').create(
-/*    {
+ /*   {
         verbose: true,
         logLevel: 'debug'
     } */
@@ -13,7 +13,7 @@ var casper = require('casper').create(
     macbook_pros = '',
     donePaging = false,
     curr_url = '';
-   
+
 Array.prototype.extend = function(other_array) {
     if (other_array.length)
         other_array.forEach(function(v) {this.push(v)}, this);    
@@ -110,6 +110,7 @@ function getMacInfo() {
     
     // Get prices for all ads
     var prices_str = this.fetchText('div.priceBox');
+	this.echo('prices_str: ' + prices_str);
     var prices_arr = prices_str.split('\n');
     prices_arr = prices_arr.filter(function(item) {
                      return item.indexOf('$') !== -1;
@@ -121,7 +122,9 @@ function getMacInfo() {
         prices_arr[i] = (Number(prices_arr[i].slice(1)) / 100).toFixed(2);
     }
 
-    prices.extend(prices_arr);
+	this.echo('prices_arr: ' + prices_arr);
+	prices.extend(prices_arr);
+	this.echo('prices: ' + prices);
     
     var descriptions_arr = this.getElementsInfo('div.adDesc').map(function(e){
     return e.html;
@@ -143,13 +146,32 @@ function getMacInfo() {
 
 
 casper.start('http://www.ksl.com/index.php?nid=231&cat=554&category=16', function() { // KSL classifieds, Apple Laptops / Desktops
+	// Check for command line arguments
+	
+	if (casper.cli.args.length !== 2) {
+    	this.echo('Need low price and high price arguments') 
+		this.echo('casperjs getMacs.js lowprice highprice')
+		.exit();
+	}
+	else {
+		var lowPrice = casper.cli.args[0];
+		var highPrice = casper.cli.args[1];
+		this.echo('lowPrice: ' + lowPrice);
+		this.echo('highPrice: ' + highPrice);
+	}
+	
+	
     // Fill out keyword search field and submit
     this.sendKeys('input[name="keyword"]', 'Macbook pro');
-    this.thenClick('input[id="searchSubmit"]', function() {
+    this.thenClick('input[id="searchSubmit"]');
+	this.waitForSelectorTextChange('.listings', function() {
          // Fill out min and max search fields and submit (separate submit for price versus keyword. Keyword search still in place)
-        this.sendKeys('input[name="min_priceInput"]', '800');
-        this.sendKeys('input[name="max_priceInput"]', '1000');
-        this.thenClick('input[id="priceSubmit"]', getMacInfo);
+		this.echo('in priceSubmit function');
+		this.echo('lowPrice (2): ' + lowPrice);
+		this.echo('highPrice: (2)' + highPrice);
+        this.sendKeys('input[name="min_priceInput"]', lowPrice);
+        this.sendKeys('input[name="max_priceInput"]', highPrice);
+        this.thenClick('input[id="priceSubmit"]'); this.waitForSelectorTextChange('.listings', getMacInfo);
     });
 });
 
