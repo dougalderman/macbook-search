@@ -90,6 +90,8 @@ function getHardDriveSizes(str) {
 function getMacInfo() {
     // save off url
     curr_url = this.getCurrentUrl();
+	
+	this.echo('curr_url: ' + curr_url);
     
     // Get titles for all ads
     var titles_arr = this.getElementsInfo('a.listlink').map(function(e){
@@ -162,17 +164,16 @@ casper.start('http://www.ksl.com/index.php?nid=231&cat=554&category=16', functio
 	
 	
     // Fill out keyword search field and submit
-    this.sendKeys('input[name="keyword"]', 'Macbook pro');
-    this.thenClick('input[id="searchSubmit"]');
-	this.waitForSelectorTextChange('.listings', function() {
+   this.sendKeys('input[name="keyword"]', 'Macbook pro');
+    this.thenClick('input[id="searchSubmit"]', function() {
          // Fill out min and max search fields and submit (separate submit for price versus keyword. Keyword search still in place)
 		this.echo('in priceSubmit function');
 		this.echo('lowPrice (2): ' + lowPrice);
-		this.echo('highPrice: (2)' + highPrice);
-        this.sendKeys('input[name="min_priceInput"]', lowPrice);
-        this.sendKeys('input[name="max_priceInput"]', highPrice);
-        this.thenClick('input[id="priceSubmit"]'); this.waitForSelectorTextChange('.listings', getMacInfo);
-    });
+		this.echo('highPrice: (2)' + highPrice); 
+		this.sendKeys('input[name="min_priceInput"]', lowPrice);
+		this.sendKeys('input[name="max_priceInput"]', highPrice);
+		this.thenClick('input[id="priceSubmit"]', getMacInfo);
+   	});
 });
 
 casper.then(function() {
